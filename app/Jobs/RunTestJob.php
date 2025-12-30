@@ -33,6 +33,7 @@ class RunTestJob implements ShouldQueue
 
         $start = now();
         $logs = [];
+        $currentStep = 'initialization';
 
         try {
             // 1️⃣ Mark as running
@@ -41,7 +42,7 @@ class RunTestJob implements ShouldQueue
                 'started_at' => $start,
             ]);
 
-            // 2️⃣ Load test definition from file
+            // 2️⃣ Load test definition
             $path = base_path("tests/runright/project_{$run->project_id}.json");
 
             if (!File::exists($path)) {
@@ -54,48 +55,42 @@ class RunTestJob implements ShouldQueue
                 throw new \Exception("Invalid test definition format");
             }
 
-            // 3️⃣ Execute steps sequentially
+            // 3️⃣ Execute steps
             foreach ($definition['steps'] as $step) {
+
+                $currentStep = $step['name'] ?? 'unnamed_step';
 
                 $method = strtoupper($step['request']['method'] ?? 'GET');
                 $url = $run->project->base_url . ($step['request']['url'] ?? '/');
 
                 $response = Http::timeout(10)->send($method, $url);
 
-                // Log request
-                $stepLog = [
-                    'step' => $step['name'] ?? "{$method} {$url}",
-                    'method' => $method,
-                    'url' => $url,
-                    'http_status' => $response->status(),
-                ];
-
-                // 4️⃣ Status assertion
+                // Status assertion
                 if (isset($step['expect']['status']) &&
                     $response->status() !== $step['expect']['status']) {
 
                     throw new \Exception(
-                        "{$stepLog['step']} failed: expected {$step['expect']['status']}, got {$response->status()}"
+                        "{$currentStep} failed: expected {$step['expect']['status']}, got {$response->status()}"
                     );
                 }
 
-                // 5️⃣ JSON assertions (optional)
-                if (isset($step['expect']['json'])) {
-                    foreach ($step['expect']['json'] as $key => $expected) {
-                        $actual = data_get($response->json(), $key);
-                        if ($actual !== $expected) {
-                            throw new \Exception(
-                                "{$stepLog['step']} JSON assertion failed on '{$key}'"
-                            );
-                        }
+                // JSON assertions
+                foreach ($step['expect']['json'] ?? [] as $key => $expected) {
+                    if (data_get($response->json(), $key) !== $expected) {
+                        throw new \Exception(
+                            "{$currentStep} JSON assertion failed on '{$key}'"
+                        );
                     }
                 }
 
-                $stepLog['status'] = 'passed';
-                $logs[] = $stepLog;
+                $logs[] = [
+                    'step' => $currentStep,
+                    'status' => 'passed',
+                    'http_status' => $response->status(),
+                ];
             }
 
-            // 6️⃣ All steps passed
+            // 4️⃣ All steps passed
             $run->update([
                 'status' => 'finished',
                 'result' => 'passed',
@@ -106,9 +101,9 @@ class RunTestJob implements ShouldQueue
 
         } catch (\Throwable $e) {
 
-            // Log failure
+            // 🔒 ALWAYS safe
             $logs[] = [
-                'step' => $step['name'] ?? 'unknown',
+                'step' => $currentStep,
                 'status' => 'failed',
                 'error' => $e->getMessage(),
             ];
