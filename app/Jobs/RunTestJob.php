@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Http;
 use Throwable;
 
 class RunTestJob implements ShouldQueue
@@ -29,7 +30,7 @@ class RunTestJob implements ShouldQueue
             return;
         }
 
-        // 1️⃣ Mark as running
+        // 1️⃣ Mark running
         $run->update([
             'status' => 'running',
             'started_at' => now(),
@@ -42,26 +43,58 @@ class RunTestJob implements ShouldQueue
         $logs = [];
 
         try {
-            // 2️⃣ Simulate execution (replace later with real runner)
-            sleep(5);
-
-            $passed = random_int(0, 1) === 1;
+            /**
+             * 🔹 STEP 1: HTTP GET
+             */
+            $response = Http::timeout(5)->get('http://example.com');
 
             $logs[] = [
-                'step' => 'simulation',
-                'message' => $passed ? 'Test passed' : 'Test failed',
+                'step' => 'GET /',
+                'status' => $response->status(),
             ];
 
-            // 3️⃣ Success / Failure result
+            /**
+             * 🔹 STEP 2: Expect status
+             */
+            if ($response->status() !== 200) {
+                throw new \Exception(
+                    'Expected status 200, got ' . $response->status()
+                );
+            }
+
+            $logs[] = [
+                'step' => 'expectStatus',
+                'message' => '200 OK',
+            ];
+
+            /**
+             * 🔹 STEP 3: Expect text
+             */
+            if (!str_contains($response->body(), 'Example Domain')) {
+                throw new \Exception(
+                    'Expected text "Example Domain" not found'
+                );
+            }
+
+            $logs[] = [
+                'step' => 'expectText',
+                'message' => 'Example Domain found',
+            ];
+
+            /**
+             * ✅ SUCCESS
+             */
             $run->update([
                 'status' => 'finished',
-                'result' => $passed ? 'passed' : 'failed',
+                'result' => 'passed',
                 'duration_ms' => (int) ((microtime(true) - $startTime) * 1000),
                 'finished_at' => now(),
                 'logs' => $logs,
             ]);
         } catch (Throwable $e) {
-            // 4️⃣ Hard failure (exception)
+            /**
+             * ❌ FAILURE
+             */
             $run->update([
                 'status' => 'failed',
                 'result' => 'failed',
@@ -69,13 +102,13 @@ class RunTestJob implements ShouldQueue
                 'finished_at' => now(),
                 'logs' => array_merge($logs, [
                     [
-                        'step' => 'exception',
+                        'step' => 'error',
                         'message' => $e->getMessage(),
                     ],
                 ]),
             ]);
 
-            throw $e; // let Laravel log it
+            throw $e; // keep Laravel logging intact
         }
     }
 }
