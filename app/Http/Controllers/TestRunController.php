@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use App\Models\TestRun;
 use App\Jobs\RunTestJob;
 
@@ -19,18 +20,30 @@ class TestRunController extends Controller
 
     public function store(Request $request)
     {
+        /** @var \App\Models\ApiToken $token */
+        $token = $request->attributes->get('api_token');
+
+        if (!$token || !$token->company) {
+            return response()->json([
+                'message' => 'Invalid API token'
+            ], 401);
+        }
+
         $request->validate([
-            'project_id' => 'required|exists:projects,id',
+            'project_id' => [
+                'required',
+                Rule::exists('projects', 'id')
+                    ->where('company_id', $token->company_id),
+            ],
         ]);
 
         $run = TestRun::create([
-            'company_id' => $request->company_id,
+            'company_id' => $token->company_id,
             'project_id' => $request->project_id,
             'source' => 'cli',
             'status' => 'queued',
         ]);
 
-        // 🚀 Dispatch runner job
         RunTestJob::dispatch($run->id);
 
         return response()->json([

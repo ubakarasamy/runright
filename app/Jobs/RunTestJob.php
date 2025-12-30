@@ -30,85 +30,47 @@ class RunTestJob implements ShouldQueue
             return;
         }
 
-        // 1️⃣ Mark running
         $run->update([
             'status' => 'running',
             'started_at' => now(),
-            'result' => null,
-            'error_message' => null,
-            'logs' => [],
         ]);
 
-        $startTime = microtime(true);
-        $logs = [];
-
         try {
-            /**
-             * 🔹 STEP 1: HTTP GET
-             */
-            $response = Http::timeout(5)->get('http://example.com');
+            // Simulated execution (replace later)
+            sleep(5);
 
-            $logs[] = [
-                'step' => 'GET /',
-                'status' => $response->status(),
-            ];
+            $passed = random_int(0, 1) === 1;
 
-            /**
-             * 🔹 STEP 2: Expect status
-             */
-            if ($response->status() !== 200) {
-                throw new \Exception(
-                    'Expected status 200, got ' . $response->status()
-                );
+            if (!$passed) {
+                throw new \Exception('Health check failed');
             }
 
-            $logs[] = [
-                'step' => 'expectStatus',
-                'message' => '200 OK',
-            ];
-
-            /**
-             * 🔹 STEP 3: Expect text
-             */
-            if (!str_contains($response->body(), 'Example Domain')) {
-                throw new \Exception(
-                    'Expected text "Example Domain" not found'
-                );
-            }
-
-            $logs[] = [
-                'step' => 'expectText',
-                'message' => 'Example Domain found',
-            ];
-
-            /**
-             * ✅ SUCCESS
-             */
             $run->update([
                 'status' => 'finished',
                 'result' => 'passed',
-                'duration_ms' => (int) ((microtime(true) - $startTime) * 1000),
                 'finished_at' => now(),
-                'logs' => $logs,
-            ]);
-        } catch (Throwable $e) {
-            /**
-             * ❌ FAILURE
-             */
-            $run->update([
-                'status' => 'failed',
-                'result' => 'failed',
-                'error_message' => $e->getMessage(),
-                'finished_at' => now(),
-                'logs' => array_merge($logs, [
-                    [
-                        'step' => 'error',
-                        'message' => $e->getMessage(),
-                    ],
-                ]),
+                'duration_ms' => 5000,
+                'logs' => [
+                    ['step' => 'health_check', 'status' => 'ok']
+                ],
             ]);
 
-            throw $e; // keep Laravel logging intact
+        } catch (\Throwable $e) {
+
+            $run->update([
+                'status' => 'finished',
+                'result' => 'failed',
+                'finished_at' => now(),
+                'duration_ms' => 5000,
+                'error_message' => $e->getMessage(),
+                'logs' => [
+                    [
+                        'step' => 'health_check',
+                        'status' => 'failed',
+                        'error' => $e->getMessage()
+                    ]
+                ],
+            ]);
         }
     }
 }

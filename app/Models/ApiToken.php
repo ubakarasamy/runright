@@ -12,5 +12,10 @@ class ApiToken extends Model
         'name',
         'token',
     ];
+
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
+    }
 }
 
