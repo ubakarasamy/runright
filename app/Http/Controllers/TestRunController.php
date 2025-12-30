@@ -54,15 +54,30 @@ class TestRunController extends Controller
     
     public function show(Request $request, int $id)
     {
+        /** @var \App\Models\ApiToken $token */
+        $token = $request->attributes->get('api_token');
+
+        if (!$token || !$token->company) {
+            return response()->json([
+                'message' => 'Invalid API token'
+            ], 401);
+        }
+
         $run = TestRun::where('id', $id)
-            ->where('company_id', $request->company_id)
-            ->firstOrFail();
+            ->where('company_id', $token->company_id)
+            ->first();
+
+        if (!$run) {
+            return response()->json([
+                'message' => 'Test run not found'
+            ], 404);
+        }
 
         return response()->json([
-            'id' => $run->id,
-            'status' => $run->status,
-            'result' => $run->result, // 👈 key addition
-            'duration_ms' => $run->duration_ms,
+            'id'          => $run->id,
+            'status'      => $run->status,
+            'result'      => $run->result,
+            'duration_ms'=> $run->duration_ms,
         ]);
     }
 
