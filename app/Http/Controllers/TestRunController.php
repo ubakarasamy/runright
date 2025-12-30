@@ -38,7 +38,7 @@ class TestRunController extends Controller
             'status' => $run->status,
         ]);
     }
-
+    
     public function show(Request $request, int $id)
     {
         $run = TestRun::where('id', $id)
