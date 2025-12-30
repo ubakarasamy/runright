@@ -3,25 +3,33 @@
 namespace App\Http\Middleware;
 
 use Closure;
+use Illuminate\Http\Request;
 use App\Models\ApiToken;
 
 class ApiTokenAuth
 {
-    public function handle($request, Closure $next)
+    public function handle(Request $request, Closure $next)
     {
-        $token = $request->bearerToken();
+        $header = $request->header('Authorization');
 
-        if (!$token) {
-            return response()->json(['error' => 'Missing token'], 401);
+        if (!$header || !str_starts_with($header, 'Bearer ')) {
+            return response()->json([
+                'message' => 'Invalid API token'
+            ], 401);
         }
 
-        $apiToken = ApiToken::where('token', $token)->first();
+        $tokenValue = trim(str_replace('Bearer', '', $header));
 
-        if (!$apiToken) {
-            return response()->json(['error' => 'Unauthorized'], 401);
+        $token = ApiToken::where('token', $tokenValue)->first();
+
+        if (!$token || !$token->company || !$token->company->is_active) {
+            return response()->json([
+                'message' => 'Invalid API token'
+            ], 401);
         }
 
-        $request->merge(['company_id' => $apiToken->company_id]);
+        // 🔑 Attach token to request
+        $request->attributes->set('api_token', $token);
 
         return $next($request);
     }
