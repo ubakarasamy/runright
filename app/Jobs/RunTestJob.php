@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Throwable;
 
 class RunTestJob implements ShouldQueue
 {
@@ -28,23 +29,53 @@ class RunTestJob implements ShouldQueue
             return;
         }
 
-        // 1️⃣ Running
+        // 1️⃣ Mark as running
         $run->update([
             'status' => 'running',
+            'started_at' => now(),
             'result' => null,
+            'error_message' => null,
+            'logs' => [],
         ]);
 
-        // 2️⃣ Simulate execution
-        sleep(5);
+        $startTime = microtime(true);
+        $logs = [];
 
-        // 🔴 Simulated test outcome
-        $passed = random_int(0, 1) === 1;
+        try {
+            // 2️⃣ Simulate execution (replace later with real runner)
+            sleep(5);
 
-        // 3️⃣ Finished
-        $run->update([
-            'status' => 'finished',
-            'result' => $passed ? 'passed' : 'failed',
-            'duration_ms' => 5000,
-        ]);
+            $passed = random_int(0, 1) === 1;
+
+            $logs[] = [
+                'step' => 'simulation',
+                'message' => $passed ? 'Test passed' : 'Test failed',
+            ];
+
+            // 3️⃣ Success / Failure result
+            $run->update([
+                'status' => 'finished',
+                'result' => $passed ? 'passed' : 'failed',
+                'duration_ms' => (int) ((microtime(true) - $startTime) * 1000),
+                'finished_at' => now(),
+                'logs' => $logs,
+            ]);
+        } catch (Throwable $e) {
+            // 4️⃣ Hard failure (exception)
+            $run->update([
+                'status' => 'failed',
+                'result' => 'failed',
+                'error_message' => $e->getMessage(),
+                'finished_at' => now(),
+                'logs' => array_merge($logs, [
+                    [
+                        'step' => 'exception',
+                        'message' => $e->getMessage(),
+                    ],
+                ]),
+            ]);
+
+            throw $e; // let Laravel log it
+        }
     }
 }
