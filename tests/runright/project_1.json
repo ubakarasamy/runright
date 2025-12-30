@@ -1,0 +1,28 @@
+{
+  "name": "Basic smoke test",
+  "steps": [
+    {
+      "name": "Homepage",
+      "request": {
+        "method": "GET",
+        "url": "/"
+      },
+      "expect": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Health check",
+      "request": {
+        "method": "GET",
+        "url": "/health"
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "status": "ok"
+        }
+      }
+    }
+  ]
+}
